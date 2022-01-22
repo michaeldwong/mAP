@@ -47,36 +47,9 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 GT_PATH = os.path.join(os.getcwd(), 'input', 'ground-truth')
 DR_PATH = os.path.join(os.getcwd(), 'input', 'detection-results')
 # if there are no images then no animation can be shown
-IMG_PATH = os.path.join(os.getcwd(), 'input', 'images-optional')
-if os.path.exists(IMG_PATH): 
-    for dirpath, dirnames, files in os.walk(IMG_PATH):
-        if not files:
-            # no image files found
-            args.no_animation = True
-else:
-    args.no_animation = True
-
-# try to import OpenCV if the user didn't choose the option --no-animation
-show_animation = False
-if not args.no_animation:
-    try:
-        import cv2
-        show_animation = True
-    except ImportError:
-        print("\"opencv-python\" not found, please install to visualize the results.")
-        args.no_animation = True
-
-# try to import Matplotlib if the user didn't choose the option --no-plot
 draw_plot = False
-if not args.no_plot:
-    try:
-        import matplotlib.pyplot as plt
-        draw_plot = True
-    except ImportError:
-        print("\"matplotlib\" not found, please install it to get the resulting plots.")
-        args.no_plot = True
-
-
+args.no_animation = True
+show_animation = False
 def log_average_miss_rate(prec, rec, num_images):
     """
         log-average miss rate:
@@ -428,7 +401,6 @@ gt_classes = sorted(gt_classes)
 n_classes = len(gt_classes)
 #print(gt_classes)
 #print(gt_counter_per_class)
-
 """
  Check format of the flag --set-class-iou (if used)
     e.g. check if class exists
@@ -674,7 +646,7 @@ with open(output_files_path + "/output.txt", 'w') as output_file:
 
         ap, mrec, mprec = voc_ap(rec[:], prec[:])
         sum_AP += ap
-        text = "{0:.2f}%".format(ap*100) + " = " + class_name + " AP " #class_name + " AP = {0:.2f}%".format(ap*100)
+        text = "{0:.2f}".format(ap*100) + " = " + class_name + " AP " #class_name + " AP = {0:.2f}%".format(ap*100)
         """
          Write to output.txt
         """
@@ -725,7 +697,7 @@ with open(output_files_path + "/output.txt", 'w') as output_file:
 
     output_file.write("\n# mAP of all classes\n")
     mAP = sum_AP / n_classes
-    text = "mAP = {0:.2f}%".format(mAP*100)
+    text = "mAP = {0:.2f}".format(mAP*100)
     output_file.write(text + "\n")
     print(text)
 
