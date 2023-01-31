@@ -266,7 +266,7 @@ def draw_plot_func(dictionary, n_classes, window_title, plot_title, x_label, out
     plt.close()
 
 
-def main_map_compute(ground_truth_for_map_cache, detection_results_for_map_cache, args=None):
+def main_map_compute(ground_truth_for_map_cache, detection_results_for_map_cache, TEMP_FILES_PATH = ".temp_files", args=None):
     
     '''
         0,0 ------> x (width)
@@ -303,7 +303,7 @@ def main_map_compute(ground_truth_for_map_cache, detection_results_for_map_cache
     """
     Create a ".temp_files/" and "output/" directory
     """
-    TEMP_FILES_PATH = ".temp_files"
+
     if not os.path.exists(TEMP_FILES_PATH): # if it doesn't exist already
         os.makedirs(TEMP_FILES_PATH)
     output_files_path = "output"
@@ -323,10 +323,6 @@ def main_map_compute(ground_truth_for_map_cache, detection_results_for_map_cache
         Create a list of all the class names present in the ground-truth (gt_classes).
     """
     # get a list with the ground-truth files
-    ground_truth_files_list = glob.glob(GT_PATH + '/*.txt')
-    if len(ground_truth_files_list) == 0:
-        return error("Error: No ground-truth files found!")
-    ground_truth_files_list.sort()
     # dictionary with counter per class
     gt_counter_per_class = {}
     counter_images_per_class = {}
