@@ -5,6 +5,7 @@ import shutil
 import operator
 import sys
 import argparse
+import uuid
 import math
 
 import numpy as np
@@ -265,7 +266,7 @@ def draw_plot_func(dictionary, n_classes, window_title, plot_title, x_label, out
     plt.close()
 
 
-def main_map_compute(args=None):
+def main_map_compute(ground_truth_for_map_cache, detection_results_for_map_cache, TEMP_FILES_PATH = ".temp_files", args=None):
     
     '''
         0,0 ------> x (width)
@@ -302,7 +303,7 @@ def main_map_compute(args=None):
     """
     Create a ".temp_files/" and "output/" directory
     """
-    TEMP_FILES_PATH = ".temp_files"
+
     if not os.path.exists(TEMP_FILES_PATH): # if it doesn't exist already
         os.makedirs(TEMP_FILES_PATH)
     output_files_path = "output"
@@ -322,74 +323,57 @@ def main_map_compute(args=None):
         Create a list of all the class names present in the ground-truth (gt_classes).
     """
     # get a list with the ground-truth files
-    ground_truth_files_list = glob.glob(GT_PATH + '/*.txt')
-    if len(ground_truth_files_list) == 0:
-        return error("Error: No ground-truth files found!")
-    ground_truth_files_list.sort()
     # dictionary with counter per class
     gt_counter_per_class = {}
     counter_images_per_class = {}
 
     gt_files = []
-    for txt_file in ground_truth_files_list:
-        #print(txt_file)
-        file_id = txt_file.split(".txt", 1)[0]
-        file_id = os.path.basename(os.path.normpath(file_id))
-        # check if there is a correspondent detection-results file
-        temp_path = os.path.join(DR_PATH, (file_id + ".txt"))
-        if not os.path.exists(temp_path):
-            error_msg = "Error. File not found: {}\n".format(temp_path)
-            error_msg += "(You can avoid this error message by running extra/intersect-gt-and-dr.py)"
-            return error(error_msg)
-        lines_list = file_lines_to_list(txt_file)
-        # create ground-truth dictionary
-        bounding_boxes = []
+    file_id = str(uuid.uuid4())# unique_id_that_is_same_for_gt_and_det
+    # create ground-truth dictionary
+    bounding_boxes = []
+    
+    is_difficult = False
+    already_seen_classes = []
+    for obj in ground_truth_for_map_cache:
         is_difficult = False
-        already_seen_classes = []
-        for line in lines_list:
-            try:
-                if "difficult" in line:
-                        class_name, left, top, right, bottom, _difficult = line.split()
-                        is_difficult = True
-                else:
-                        class_name, left, top, right, bottom = line.split()
-            except ValueError:
-                error_msg = "Error: File " + txt_file + " in the wrong format.\n"
-                error_msg += " Expected: <class_name> <left> <top> <right> <bottom> ['difficult']\n"
-                error_msg += " Received: " + line
-                error_msg += "\n\nIf you have a <class_name> with spaces between words you should remove them\n"
-                error_msg += "by running the script \"remove_space.py\" or \"rename_class.py\" in the \"extra/\" folder."
-                return error(error_msg)
-            # check if class is in the ignore list, if yes skip
-            if args is not None and class_name in args.ignore:
-                continue
-            bbox = left + " " + top + " " + right + " " +bottom
-            if is_difficult:
-                bounding_boxes.append({"class_name":class_name, "bbox":bbox, "used":False, "difficult":True})
-                is_difficult = False
+        try:
+            class_name, left, top, right, bottom = obj.type, obj.left, obj.top, obj.right, obj.bottom
+        except ValueError:
+            error_msg = "Error: object in the wrong format.\n"
+            error_msg += " Expected: <class_name> <left> <top> <right> <bottom> ['difficult']\n"
+            error_msg += f" Received: {obj}"
+            error_msg += "\n\nIf you have a <class_name> with spaces between words you should remove them\n"
+            error_msg += "by running the script \"remove_space.py\" or \"rename_class.py\" in the \"extra/\" folder."
+            return error(error_msg)
+        # check if class is in the ignore list, if yes skip
+        if args is not None and class_name in args.ignore:
+            continue
+        bbox = f"{left} {top} {right} {bottom}"
+        if is_difficult:
+            bounding_boxes.append({"class_name":class_name, "bbox":bbox, "used":False, "difficult":True})
+            is_difficult = False
+        else:
+            bounding_boxes.append({"class_name":class_name, "bbox":bbox, "used":False})
+            # count that object
+            if class_name in gt_counter_per_class:
+                gt_counter_per_class[class_name] += 1
             else:
-                bounding_boxes.append({"class_name":class_name, "bbox":bbox, "used":False})
-                # count that object
-                if class_name in gt_counter_per_class:
-                    gt_counter_per_class[class_name] += 1
+                # if class didn't exist yet
+                gt_counter_per_class[class_name] = 1
+
+            if class_name not in already_seen_classes:
+                if class_name in counter_images_per_class:
+                    counter_images_per_class[class_name] += 1
                 else:
                     # if class didn't exist yet
-                    gt_counter_per_class[class_name] = 1
+                    counter_images_per_class[class_name] = 1
+                already_seen_classes.append(class_name)
 
-                if class_name not in already_seen_classes:
-                    if class_name in counter_images_per_class:
-                        counter_images_per_class[class_name] += 1
-                    else:
-                        # if class didn't exist yet
-                        counter_images_per_class[class_name] = 1
-                    already_seen_classes.append(class_name)
-
-
-        # dump bounding_boxes into a ".json" file
-        new_temp_file = TEMP_FILES_PATH + "/" + file_id + "_ground_truth.json"
-        gt_files.append(new_temp_file)
-        with open(new_temp_file, 'w') as outfile:
-            json.dump(bounding_boxes, outfile)
+    # dump bounding_boxes into a ".json" file
+    new_temp_file = TEMP_FILES_PATH + "/" + file_id + "_ground_truth.json"
+    gt_files.append(new_temp_file)
+    with open(new_temp_file, 'w') as outfile:
+        json.dump(bounding_boxes, outfile)
 
     gt_classes = list(gt_counter_per_class.keys())
     # let's sort the classes alphabetically
@@ -434,36 +418,28 @@ def main_map_compute(args=None):
 
     for class_index, class_name in enumerate(gt_classes):
         bounding_boxes = []
-        for txt_file in dr_files_list:
-            #print(txt_file)
-            # the first time it checks if all the corresponding ground-truth files exist
-            file_id = txt_file.split(".txt",1)[0]
-            file_id = os.path.basename(os.path.normpath(file_id))
-            temp_path = os.path.join(GT_PATH, (file_id + ".txt"))
-            if class_index == 0:
-                if not os.path.exists(temp_path):
-                    error_msg = "Error. File not found: {}\n".format(temp_path)
-                    error_msg += "(You can avoid this error message by running extra/intersect-gt-and-dr.py)"
-                    return error(error_msg)
-            lines = file_lines_to_list(txt_file)
-            for line in lines:
-                try:
-                    tmp_class_name, confidence, left, top, right, bottom = line.split()
-                except ValueError:
-                    error_msg = "Error: File " + txt_file + " in the wrong format.\n"
-                    error_msg += " Expected: <class_name> <confidence> <left> <top> <right> <bottom>\n"
-                    error_msg += " Received: " + line
-                    return error(error_msg)
-                if tmp_class_name == class_name:
-                    #print("match")
-                    bbox = left + " " + top + " " + right + " " +bottom
-                    bounding_boxes.append({"confidence":confidence, "file_id":file_id, "bbox":bbox})
-                    #print(bounding_boxes)
+
+        
+        for obj in detection_results_for_map_cache:
+            try:
+                tmp_class_name, confidence, left, top, right, bottom = obj.type, obj.confidence, obj.left, obj.top, obj.right, obj.bottom
+            except ValueError:
+                error_msg = "Error: object in the wrong format.\n"
+                error_msg += " Expected: <class_name> <confidence> <left> <top> <right> <bottom>\n"
+                error_msg += f" Received: {obj}"
+                return error(error_msg)
+            if tmp_class_name == class_name:
+                #print("match")
+                # bbox = left + " " + top + " " + right + " " +bottom
+                bbox = f"{left} {top} {right} {bottom}"
+                bounding_boxes.append({"confidence":confidence, "file_id":file_id, "bbox":bbox})
+                #print(bounding_boxes)
         # sort detection-results by decreasing confidence
         bounding_boxes.sort(key=lambda x:float(x['confidence']), reverse=True)
         with open(TEMP_FILES_PATH + "/" + class_name + "_dr.json", 'w') as outfile:
             json.dump(bounding_boxes, outfile)
 
+    
     """
     Calculate the AP for each class
     """
